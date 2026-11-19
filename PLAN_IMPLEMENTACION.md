@@ -222,6 +222,14 @@ Puntos que cuidar:
 
 Si alguno de estos componentes resulta de pago, no se usa y se sustituye por CSS propio. El documento final debe decir cuáles se emplearon. "Scrambling links" parece ser el mismo `decode` con `scramble: true`, y también está por confirmar.
 
+**Resultado de la Fase 0 (18 de noviembre de 2026).** Se instaló `asciify-engine` 4.33.0 desde npm, con Vite. Se leyeron los archivos de tipos del paquete (`kit.d.ts`) y su referencia incluida (`components.md`, `kit.md`). Todavía no se corrió cada componente en un navegador: eso ocurre al integrarlos en las Fases 3 y 4, y cualquier falla se anota aquí.
+
+- El paquete existe, es MIT y exporta `asciify-engine/kit`. Es una biblioteca sin dependencia de framework, así que sirve con JavaScript puro y Vite. Queda descartado el plan de reserva por paquete inexistente.
+- Las 14 firmas de la tabla se confirmaron en los tipos: `commandPalette`, `buttonLoading`, `toastStack`, `decode`, `odometer`, `blockChart`, `tabs`, `pill`, `statusOrb`, `skeleton`, `disintegrate`, `pageDissolve`, `background` y `ditherGradient`.
+- Correcciones respecto a lo inferido: `commandPalette` recibe selectores `input` y `rows` y las filas son `[role="option"]` con `id`. `tabs` necesita botones `role="tab"` y un `<span class="thumb">`, y con `panels: 'none'` no administra paneles. `disintegrate` acepta `host`, `remove` y `collapse`. `decode` con `scramble: true` confirma el efecto de "Scrambling links". Los fondos se importan como valor, por ejemplo `import { background, swell } from 'asciify-engine/kit'`.
+- La referencia no habla de SVG para `disintegrate`. Se mantiene el diseño con nodos `div`.
+- La página no marca cuáles componentes son gratuitos. El paquete es MIT completo, así que se usan todos los que están en el paquete, y el documento lo declara.
+
 **Dibujo del árbol (clase TreeView, en view/TreeView.js).**
 
 1. Recibir la lista plana de nodos (`value`, `parent`, `side`, `level`, `inorderIndex`).
