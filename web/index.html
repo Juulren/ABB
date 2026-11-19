@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Árbol Binario de Búsqueda</title>
+  <meta name="description" content="Aplicación web para visualizar y operar un árbol binario de búsqueda." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='9' r='5' fill='%235eead4'/%3E%3Ccircle cx='8' cy='24' r='5' fill='%23a78bfa'/%3E%3Ccircle cx='24' cy='24' r='5' fill='%23a78bfa'/%3E%3Cpath d='M13 13 9 20M19 13l4 7' stroke='%2394a3b8' stroke-width='2'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div id="bg" class="bg" aria-hidden="true"></div>
+
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <h1 id="title">Árbol Binario de Búsqueda</h1>
+        <nav id="nav" aria-label="Vistas">
+          <a href="#arbol" data-view="tree" aria-current="page">Árbol</a>
+          <a href="#impresion" data-view="print">Impresión</a>
+        </nav>
+      </div>
+      <div class="top-right">
+        <button id="bgToggle" class="btn ghost" type="button" aria-pressed="true" title="Activar o apagar el fondo animado">Fondo</button>
+        <button id="paletteTrigger" class="btn" type="button" aria-haspopup="listbox">Menú de operaciones <kbd>Ctrl K</kbd></button>
+        <span class="conn"><span id="orb" class="orb" aria-hidden="true"></span><span id="orbLabel" role="status">API</span></span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="side card" aria-label="Controles">
+        <h2>Operaciones</h2>
+        <label for="valA">Valor</label>
+        <input id="valA" type="text" inputmode="numeric" autocomplete="off" placeholder="-999 a 999" />
+        <label for="valB">Segundo valor <span class="hint">(ancestro común o nuevo valor)</span></label>
+        <input id="valB" type="text" inputmode="numeric" autocomplete="off" placeholder="-999 a 999" />
+
+        <div class="btn-grid">
+          <button class="btn primary" type="button" data-op="insert">Insertar</button>
+          <button class="btn" type="button" data-op="search">Buscar</button>
+          <button class="btn danger" type="button" data-op="delete">Borrar</button>
+          <button class="btn" type="button" data-op="update">Actualizar</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn ghost" type="button" data-op="seed">Ejemplo</button>
+          <button class="btn ghost" type="button" data-op="clear">Vaciar</button>
+        </div>
+        <p class="tip">Haz clic en un nodo para copiar su valor. Con <kbd>Ctrl K</kbd> abres las 15 operaciones.</p>
+      </aside>
+
+      <section class="stage card" aria-label="Árbol">
+        <div id="views" class="views">
+          <div id="treeViewBox" class="view">
+            <div id="canvasWrap" class="canvas-wrap">
+              <div id="sizer" class="sizer">
+                <div id="scene" class="scene">
+                  <svg id="edges" class="edges" aria-hidden="true"></svg>
+                </div>
+              </div>
+            </div>
+            <div id="empty" class="empty">
+              <p>El árbol está vacío.</p>
+              <p class="muted">Inserta un valor o pulsa «Ejemplo».</p>
+            </div>
+          </div>
+          <div id="printViewBox" class="view" hidden>
+            <pre id="printText" class="print" aria-label="Árbol impreso"></pre>
+          </div>
+        </div>
+        <div id="skel" class="skel" aria-hidden="true">
+          <div data-block="text" class="sk-line w60"></div>
+          <div data-block="text" class="sk-line w40"></div>
+          <div data-block="text" class="sk-line w80"></div>
+        </div>
+      </section>
+
+      <section class="info" aria-label="Resultados">
+        <div class="card summary">
+          <h2>Resumen</h2>
+          <div class="counters">
+            <div><span id="cNodes" class="num">0</span><span class="cap">Nodos</span></div>
+            <div><span id="cLeaves" class="num">0</span><span class="cap">Hojas</span></div>
+            <div><span id="cLevels" class="num">0</span><span class="cap">Niveles</span></div>
+          </div>
+          <p id="chartLabel" class="muted small">Nodos por nivel</p>
+          <div id="plot" class="plot"></div>
+        </div>
+
+        <div class="card trav">
+          <h2>Recorridos</h2>
+          <div id="tablist" role="tablist" class="tabs" aria-label="Recorrido">
+            <span class="thumb"></span>
+            <button role="tab" type="button" aria-selected="true">Preorden</button>
+            <button role="tab" type="button">Inorden</button>
+            <button role="tab" type="button">Postorden</button>
+            <button role="tab" type="button">Por niveles</button>
+          </div>
+          <p id="travTitle" class="small muted">Elige un recorrido</p>
+          <div id="travList" class="pills"></div>
+        </div>
+
+        <div class="card result" aria-live="polite">
+          <h2>Resultado</h2>
+          <p id="resultTitle" class="r-title" data-tone="ok">Cargando…</p>
+          <div id="resultBody" class="r-body"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toasts" class="toasts"></div>
+
+  <div id="palette" class="palette" hidden role="dialog" aria-label="Menú de operaciones">
+    <input id="paletteSearch" type="text" placeholder="Buscar operación…" aria-label="Buscar operación" autocomplete="off" />
+    <div id="paletteRows" class="rows" role="listbox"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -416,3 +416,27 @@ Las capturas se toman con el navegador integrado sobre los datos de `POST /api/t
 Total: 7 días, sin margen. Las cifras son estimaciones para una persona y dependen sobre todo de lo que revele la Fase 0. No hay fecha de entrega registrada, así que antes de empezar se anota y se reserva al menos un día de margen.
 
 **Lista de recortes** si el tiempo se acaba, en este orden: fondo animado, transición de página, contadores con odómetro, gráfica por nivel. Las 15 operaciones, el dibujo del árbol y el documento no se recortan.
+
+---
+
+## 9. Estado de avance (19 de noviembre de 2026)
+
+Las fases 0 a 6 están hechas. El código, las pruebas y el documento están en el repositorio.
+
+**Resultado.** Las 15 operaciones funcionan desde la interfaz y desde la API, más la actualización de valor que completa el CRUD. `dotnet test` pasa las 82 pruebas (50 de modelo y servicios, 32 de integración). El documento del proyecto está en `docs/Proyecto_ABB.md` y `docs/Proyecto_ABB.docx`, con 24 figuras descritas. Su primera hoja queda en blanco para la portada.
+
+**Diferencias respecto a lo planeado:**
+
+- El documento se generó con un script en Python (python-docx) porque pandoc no está instalado. No usa `reference.docx`.
+- Las 24 figuras se numeran por orden de aparición. Las dos últimas del plan (diagrama de clases y de capas) aparecen en la sección 5.
+- No se usó `ditherGradient`.
+- Los nodos se identifican por su valor. En el borrado con dos hijos se anima el nodo borrado, y el sucesor se desplaza solo a la posición del anterior al redibujar.
+- Sin GPU, el `blockChart` no dibuja. Se añadió un respaldo con barras HTML. Los demás efectos de Asciify se omiten en ese caso.
+- Swagger se agregó con Swashbuckle y solo está activo en desarrollo.
+
+**Pendiente o no comprobado:**
+
+- La portada: los datos de institución, materia, alumno, matrícula y docente los pone quien entrega.
+- La fecha de entrega y si el docente espera .docx o PDF.
+- Pruebas en Firefox, Safari y en un teléfono real, navegación solo con teclado a fondo y `prefers-reduced-motion`.
+- Abrir el .docx en Word. Se revisó solo en LibreOffice.

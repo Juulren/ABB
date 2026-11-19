@@ -6,6 +6,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 // Inyección de dependencias: los controladores solo conocen las interfaces.
 builder.Services.AddSingleton<ArbolBinarioBusqueda>();
@@ -18,6 +20,12 @@ builder.Services.AddSingleton<IArbolComandos>(sp => sp.GetRequiredService<ArbolS
 builder.Services.AddSingleton<IArbolConsultas>(sp => sp.GetRequiredService<ArbolService>());
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();

@@ -2,5 +2,4 @@ bin/
 obj/
 .vs/
 *.user
-src/Abb.Api/wwwroot/
 docs/capturas/_tmp/
