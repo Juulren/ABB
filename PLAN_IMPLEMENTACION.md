@@ -19,6 +19,7 @@ Aplicación web dinámica con API REST en C# (ASP.NET Core) y frontend en JavaSc
 | Tipo de dato | Enteros entre -999 y 999, sin duplicados (el duplicado responde 409) | Simplifica comparaciones y mantiene legible el ancho de cada nodo |
 | Convención de niveles | La raíz está en el nivel 1. El número de niveles del árbol es igual a su altura en nodos | Hay que dejarlo escrito en el documento, porque otros textos usan nivel 0 |
 | Dibujo del árbol | Nodos HTML posicionados sobre un SVG de líneas, con un cálculo de posiciones propio en píxeles | En la lista de 39 componentes de Asciify no aparece uno de árbol (a confirmar en la Fase 0). Los nodos HTML permiten animarlos con sus componentes |
+| Repositorio | GitHub: https://github.com/Juulren/ABB.git, rama `master`. Un commit por fase terminada, con mensaje que nombra la fase. `node_modules/` y `dist/` quedan fuera con `.gitignore` | El historial de commits sirve de evidencia del avance por fases, y el documento final enlaza el repositorio |
 | Formato final | Se redacta en Markdown y se exporta a .docx con pandoc y un `reference.docx` | La instrucción pide un documento con portada. Se confirma con el docente si espera .docx o PDF antes de la Fase 6 |
 
 **Lo que no se sabe todavía.** La página de componentes de Asciify lista 39 elementos, pero no marca cuáles son gratuitos ni da descripciones. Tampoco documenta instalación con CDN. Las firmas de función de la sección 4 se leyeron de los ejemplos de la referencia de componentes y están marcadas como inferidas. La Fase 0 las comprueba contra el paquete real antes de escribir pantallas.
@@ -326,7 +327,7 @@ Estructura pedida: **Portada con datos completos** y **Desarrollo**.
 10. Pruebas realizadas y resultados.
 11. Limitaciones (memoria, sin persistencia, tope de nodos, dependencia de GPU).
 12. Conclusiones.
-13. Referencias (documentación de .NET, sitio de Asciify con fecha de consulta).
+13. Referencias (documentación de .NET, sitio de Asciify con fecha de consulta) y enlace al repositorio de GitHub (https://github.com/Juulren/ABB.git).
 
 **Imágenes con descripción.** Cada captura lleva número, título y un párrafo que dice qué operación se ve y qué valores se usaron.
 
@@ -387,6 +388,7 @@ Las capturas se toman con el navegador integrado sobre los datos de `POST /api/t
 - El código respeta la estructura MVC en servidor y cliente. Los controladores solo dependen de interfaces, y las pruebas lo comprueban con dobles.
 - Los cinco principios SOLID tienen una clase concreta y una prueba que los respalda, y el CRUD está cubierto por `POST`, `GET`, `PUT` y `DELETE`.
 - `dotnet run` levanta la aplicación completa, y el README explica los pasos.
+- El repositorio de GitHub tiene el código, el README, el plan y el documento final, y el último commit coincide con lo entregado.
 - El documento declara qué componentes de Asciify se usaron.
 
 ---
