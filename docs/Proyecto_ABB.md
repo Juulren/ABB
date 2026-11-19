@@ -39,7 +39,7 @@ El borrado tiene tres casos. Si el nodo es una hoja se quita sin más. Si tiene 
 
 Componentes de Asciify que sí se usan: `background` (preset `swell`), `decode` (título y enlaces), `tabs` (selector de recorrido), `commandPalette` (menú de operaciones), `buttonLoading` (botones), `toastStack` (avisos), `odometer` (contadores), `blockChart` (nodos por nivel), `pill` (resultado de los recorridos), `statusOrb` (estado de la API), `skeleton` (carga inicial), `pageDissolve` (cambio de vista) y `disintegrate` (borrado de un nodo). El plan incluía también `ditherGradient`, que al final no se empleó.
 
-Los efectos de Asciify necesitan WebGL2 con aceleración de GPU. En una prueba con un renderizador por software (SwiftShader) los componentes no se montaron. Por eso la gráfica de nodos por nivel tiene un respaldo con barras HTML, y el resto de la interfaz sigue funcionando sin los efectos.
+Los efectos de Asciify necesitan WebGL2 con aceleración de GPU. En una prueba con un renderizador por software (SwiftShader) no se montó ningún canvas de Asciify y el `blockChart` lanzó un error, de modo que la gráfica quedó vacía. Por eso la gráfica de nodos por nivel tiene un respaldo con barras HTML. El comportamiento del resto de la interfaz en ese modo no se verificó.
 
 ## 4. Diseño
 
@@ -82,7 +82,7 @@ ABB/
 
 - **Valores.** Enteros entre -999 y 999, sin duplicados. Un duplicado responde 409. Con ese rango el número cabe en el círculo de cada nodo.
 - **Tope de nodos.** El árbol admite como máximo 1000 nodos, para que el dibujo siga siendo legible. El nodo 1001 responde 400.
-- **Errores.** Los errores salen como `application/problem+json`: 400 para un valor ausente, decimal, desbordado o fuera de rango, 404 para un nodo que no existe y 409 para un duplicado. Las rutas reciben `{valor}` como texto y lo validan a mano, porque con la restricción `{valor:int}` un texto no numérico daría 404 en lugar de 400.
+- **Errores.** Los errores salen como `application/problem+json`: 400 para un valor ausente en el cuerpo JSON, decimal, desbordado o fuera de rango (una petición sin `Content-Type` responde 415), 404 para un nodo que no existe y 409 para un duplicado. Las rutas reciben `{valor}` como texto y lo validan a mano, porque con la restricción `{valor:int}` un texto no numérico daría 404 en lugar de 400.
 - **Árbol en forma plana.** Las respuestas devuelven el árbol como una lista de nodos con `value`, `parent`, `side`, `level` e `inorderIndex`. Un árbol anidado habría fallado al serializar cadenas de más de 64 niveles, que es el límite de profundidad por defecto de System.Text.Json. Además, esos campos son los que necesita el dibujo.
 - **Un solo árbol en memoria.** No hay base de datos. El árbol es un singleton protegido con un candado de lectura y escritura.
 - **El cliente no calcula operaciones.** Solo calcula posiciones de dibujo. Los resultados vienen siempre de la API.
@@ -1302,18 +1302,26 @@ export const COMMANDS = [
 ```javascript
   async remove(a) {
     const r = await this.api.remove(a);
-    await walk(this.treeView, r.path);
-    this.treeView.mark(a, 'target');
     const casos = {
       hoja: 'Era una hoja: se quitó sin más.',
       unHijo: 'Tenía un hijo: el hijo ocupó su lugar.',
       dosHijos: `Tenía dos hijos: se reemplazó por su sucesor inorden (${r.successor}).`,
     };
-    if (r.case === 'dosHijos') await walk(this.treeView, r.successorPath.slice(1), 'successor');
-    const el = this.treeView.nodeEl(a);
-    if (el) await disintegrate(el, { duration: 620, collapse: false, remove: false });
+    await this.safe(async () => {
+      await walk(this.treeView, r.path);
+      this.treeView.mark(a, 'target');
+      if (r.case === 'dosHijos') await walk(this.treeView, r.successorPath.slice(1), 'successor');
+      const el = this.treeView.nodeEl(a);
+      // Sin un campo que dibuje, disintegrate podría no resolverse: se limita la espera.
+      if (el) {
+        await Promise.race([
+          disintegrate(el, { duration: 620, collapse: false, remove: false }),
+          new Promise((resolve) => setTimeout(resolve, 1800)),
+        ]);
+      }
+    });
     this.model.setTree(r.tree);
-    await this.refreshSummary();
+    await this.safeSummary();
     this.model.setResult({
       title: `Se borró el ${a}`,
       lines: [casos[r.case] ?? '', `Ruta hasta el nodo: ${this.ruta(r.path)}`],
@@ -1386,7 +1394,7 @@ for (const link of navLinks) {
   link.addEventListener('click', (e) => {
     e.preventDefault();
     if (link.dataset.view === 'print') controller.run('print');
-    else showView('tree', link);
+    else if (!controller.busy) showView('tree', link);
   });
 }
 
@@ -1535,7 +1543,7 @@ Dados dos valores, devuelve el nodo más profundo que es ancestro de ambos. Si u
 
 En pantallas angostas el escenario del árbol pasa arriba y los paneles se apilan debajo.
 
-![Figura 24. Vista en un teléfono de 390 px de ancho. Los controles, el resumen, los recorridos y el resultado quedan en una sola columna.](capturas/fig22_vista_telefono.png "w=2.6")
+![Figura 24. Vista con un ancho de 390 px, el de un teléfono (no es un dispositivo real). Los controles, el resumen, los recorridos y el resultado quedan en una sola columna.](capturas/fig22_vista_telefono.png "w=2.6")
 
 ## 10. Pruebas realizadas y resultados
 
@@ -1545,7 +1553,7 @@ En pantallas angostas el escenario del árbol pasa arriba y los paneles se apila
 - SOLID: un recorrido nuevo se agrega sin tocar el código existente, y el servicio se usa por sus dos interfaces pequeñas.
 - API: los códigos 200, 201, 400, 404 y 409, el formato `problem+json`, los valores no válidos (ausente, decimal, desbordado, texto y fuera de rango) y una cadena degenerada de 200 niveles que se serializa sin error.
 
-**Pruebas en el navegador.** La aplicación se recorrió completa en Chrome con GPU: las quince operaciones, el cambio de vista, la paleta y las pestañas. La consola quedó sin errores en esa pasada. Con un renderizador por software, el `blockChart` falló, y por eso se añadió el respaldo con barras.
+**Pruebas en el navegador.** La aplicación se recorrió completa en Chrome con GPU: las quince operaciones, el cambio de vista, la paleta y las pestañas. La consola quedó sin errores en esa pasada. Con un renderizador por software, el `blockChart` falló, y por eso se añadió el respaldo con barras. Después de una revisión se endureció el controlador del cliente: si una animación falla, el árbol se dibuja de todos modos con la respuesta del servidor, y el borrado limita la espera de `disintegrate` a 1,8 segundos.
 
 **Lo que no se comprobó.** No se probó en Firefox, Safari ni en un teléfono real (la vista móvil es una captura a 390 px). No se hizo una revisión formal de navegación solo con teclado más allá de lo que trae la biblioteca, ni se verificó el comportamiento con `prefers-reduced-motion` activado. Tampoco hubo pruebas de carga. Las aristas se animan con la propiedad CSS `d`, que no se probó fuera de Chrome. Si otro navegador no la anima, las líneas saltarían en lugar de deslizarse.
 
@@ -1556,15 +1564,16 @@ En pantallas angostas el escenario del árbol pasa arriba y los paneles se apila
 - El árbol vive en la memoria del servidor. Al reiniciarlo se pierde, y todas las personas que abran la aplicación ven el mismo árbol.
 - Los valores van de -999 a 999 y el árbol admite 1000 nodos como máximo.
 - El árbol no se rebalancea. Insertar valores ordenados produce una cadena, y la operación 14 lo detecta pero no lo corrige.
-- Los efectos de Asciify dependen de WebGL2 con GPU. Sin ella, la interfaz se mantiene usable pero sin esos efectos, y solo la gráfica por nivel tiene un respaldo propio.
+- Los efectos de Asciify dependen de WebGL2 con GPU. Sin ella no se montan sus canvas. Solo la gráfica por nivel tiene un respaldo propio, y el comportamiento del resto de la interfaz en ese caso no se verificó.
 - Swagger está activo solo en el entorno de desarrollo.
-- Más de unos 40 nodos obligan a desplazar el escenario, porque el escalado tiene un mínimo para que los números sigan siendo legibles.
+- Con más de unos 40 nodos (la cifra depende del ancho de la ventana) hay que desplazar el escenario, porque el escalado tiene un mínimo para que los números sigan siendo legibles.
+- Los nodos del árbol son elementos `div` que solo responden al clic. No se pueden enfocar, así que no se elige un nodo con el teclado.
 
 ## 12. Conclusiones
 
 La aplicación cumple las quince operaciones pedidas con una estructura que separa el modelo, los controladores y las vistas en el servidor y en el cliente. Mantener la estructura de datos fuera del transporte HTTP permitió probarla sin levantar el servidor, y las 82 pruebas dieron confianza para cambiar el borrado y las consultas mientras se construía la interfaz.
 
-Dos decisiones resultaron más importantes de lo previsto. La primera fue devolver el árbol como lista plana, porque el límite de profundidad del serializador habría roto las cadenas largas. La segunda fue que el cliente no calcule nada del árbol: gracias a eso la vista no pudo contradecir a los datos.
+Dos decisiones resultaron más importantes de lo previsto. La primera fue devolver el árbol como lista plana, porque el límite de profundidad del serializador habría roto las cadenas largas. La segunda fue que el cliente no calcule nada del árbol: la vista siempre se redibuja a partir de la respuesta de la API. Como el árbol está en la memoria del servidor y se comparte, otra pestaña puede cambiarlo y esa vista no lo notará hasta su siguiente petición.
 
 Queda pendiente verificar la aplicación en otros navegadores y dispositivos, revisar la accesibilidad con más detalle y, si el uso lo pide, rebalancear el árbol con rotaciones AVL.
 

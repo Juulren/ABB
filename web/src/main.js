@@ -58,7 +58,7 @@ for (const link of navLinks) {
   link.addEventListener('click', (e) => {
     e.preventDefault();
     if (link.dataset.view === 'print') controller.run('print');
-    else showView('tree', link);
+    else if (!controller.busy) showView('tree', link);
   });
 }
 

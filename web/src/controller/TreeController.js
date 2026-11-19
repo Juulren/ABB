@@ -93,10 +93,17 @@ export class TreeController {
   /** Lo llaman las pestañas cuando la persona elige un recorrido con el ratón o el teclado. */
   onTabChange(index) {
     if (index === this.currentTab) return;
+    if (this.busy) {
+      // La pestaña ya se movió. Se devuelve a la del recorrido que sigue en pantalla.
+      if (this.currentTab >= 0) this.tabs?.select(this.currentTab);
+      this.resultView.toast('Operación en curso', 'Espera a que termine la animación.');
+      return;
+    }
     this.run(TRAVERSAL_TABS[index].id);
   }
 
   async init() {
+    this.busy = true;
     this.model.setConnection('loading');
     try {
       this.model.setTree(await this.api.getTree());
@@ -105,6 +112,8 @@ export class TreeController {
       this.model.setResult({ title: 'Listo', lines: ['Inserta un valor o carga el árbol de ejemplo para empezar.'] });
     } catch (e) {
       this.fail(e);
+    } finally {
+      this.busy = false;
     }
   }
 
@@ -172,6 +181,20 @@ export class TreeController {
     this.resultView.toast('Error inesperado', String(error?.message ?? error));
   }
 
+  /** Una animación que falla no debe impedir que se dibuje el árbol que ya cambió en el servidor. */
+  async safe(animation) {
+    try {
+      await animation();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  /** Si el resumen falla después de un cambio, el cambio ya se hizo: no se reporta como error. */
+  async safeSummary() {
+    await this.safe(() => this.refreshSummary());
+  }
+
   async refreshSummary() {
     const [stats, levels] = await Promise.all([this.api.stats(), this.api.levels()]);
     this.model.setSummary(stats, levels);
@@ -211,10 +234,10 @@ export class TreeController {
 
   async insert(a) {
     const r = await this.api.insert(a);
-    await walk(this.treeView, r.path.slice(0, -1));
+    await this.safe(() => walk(this.treeView, r.path.slice(0, -1)));
     this.model.setTree(r.tree);
     this.treeView.mark(a, 'found');
-    await this.refreshSummary();
+    await this.safeSummary();
     this.model.setResult({
       title: `Se insertó el ${a}`,
       lines: [`Ruta de inserción: ${this.ruta(r.path)}`],
@@ -223,18 +246,26 @@ export class TreeController {
 
   async remove(a) {
     const r = await this.api.remove(a);
-    await walk(this.treeView, r.path);
-    this.treeView.mark(a, 'target');
     const casos = {
       hoja: 'Era una hoja: se quitó sin más.',
       unHijo: 'Tenía un hijo: el hijo ocupó su lugar.',
       dosHijos: `Tenía dos hijos: se reemplazó por su sucesor inorden (${r.successor}).`,
     };
-    if (r.case === 'dosHijos') await walk(this.treeView, r.successorPath.slice(1), 'successor');
-    const el = this.treeView.nodeEl(a);
-    if (el) await disintegrate(el, { duration: 620, collapse: false, remove: false });
+    await this.safe(async () => {
+      await walk(this.treeView, r.path);
+      this.treeView.mark(a, 'target');
+      if (r.case === 'dosHijos') await walk(this.treeView, r.successorPath.slice(1), 'successor');
+      const el = this.treeView.nodeEl(a);
+      // Sin un campo que dibuje, disintegrate podría no resolverse: se limita la espera.
+      if (el) {
+        await Promise.race([
+          disintegrate(el, { duration: 620, collapse: false, remove: false }),
+          new Promise((resolve) => setTimeout(resolve, 1800)),
+        ]);
+      }
+    });
     this.model.setTree(r.tree);
-    await this.refreshSummary();
+    await this.safeSummary();
     this.model.setResult({
       title: `Se borró el ${a}`,
       lines: [casos[r.case] ?? '', `Ruta hasta el nodo: ${this.ruta(r.path)}`],
@@ -245,7 +276,7 @@ export class TreeController {
     const r = await this.api.update(a, b);
     this.model.setTree(r.tree);
     this.treeView.mark(b, 'found');
-    await this.refreshSummary();
+    await this.safeSummary();
     this.model.setResult({
       title: `Se cambió el ${a} por el ${b}`,
       lines: ['En un ABB el cambio equivale a borrar el valor anterior e insertar el nuevo.'],
@@ -254,14 +285,14 @@ export class TreeController {
 
   async seed() {
     this.model.setTree(await this.api.seed());
-    await this.refreshSummary();
+    await this.safeSummary();
     this.model.setResult({ title: 'Árbol de ejemplo cargado', lines: ['10 nodos: 50, 30, 70, 20, 40, 60, 80, 35, 45, 65.'] });
   }
 
   async clear() {
     this.model.setTree(await this.api.clear());
     this.model.setTraversal(null, []);
-    await this.refreshSummary();
+    await this.safeSummary();
     this.model.setResult({ title: 'Árbol vaciado', lines: ['No quedan nodos.'] });
   }
 
