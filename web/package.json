@@ -1,0 +1,16 @@
+{
+  "name": "abb-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "asciify-engine": "4.33.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8"
+  }
+}
