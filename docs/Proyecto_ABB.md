@@ -39,53 +39,27 @@ ABB/
 
 ## 4. Diseño de la API
 
-Cada operación tiene su ruta. La tabla las resume.
+Cada operación tiene su ruta bajo `/api/tree`. Imprimir es un `GET` a esa ruta (o a `/print` para la versión en texto), buscar y borrar usan `/nodes/{valor}` con `GET` y `DELETE`, e insertar es un `POST` a `/nodes`. Los cuatro recorridos cuelgan de `/traversals/` con el nombre del recorrido: `levelorder`, `preorder`, `postorder` e `inorder`. Las demás tienen una ruta con su propio nombre (`/levels`, `/extremes`, `/stats`, `/balance` y `/lca?a=&b=`), y las que preguntan por un nodo, como su nivel o sus ancestros, se cuelgan de `/nodes/{valor}`. Hay además tres rutas de apoyo: `PUT /nodes/{valor}` para actualizar, `DELETE` a `/api/tree` para vaciar el árbol y `POST` a `/seed` para cargar el ejemplo.
 
-| # | Operación | Método y ruta |
-|---|---|---|
-| 1 | Imprimir elementos | `GET /api/tree` y `GET /api/tree/print` |
-| 2 | Buscar | `GET /api/tree/nodes/{valor}` |
-| 3 | Insertar | `POST /api/tree/nodes` |
-| 4 | Borrar | `DELETE /api/tree/nodes/{valor}` |
-| 5 a 8 | Recorridos | `GET /api/tree/traversals/{levelorder, preorder, postorder, inorder}` |
-| 9 | Número de niveles | `GET /api/tree/levels` |
-| 10 | Nivel de un nodo | `GET /api/tree/nodes/{valor}/level` |
-| 11 | Mínimo y máximo | `GET /api/tree/extremes` |
-| 12 | Contar nodos y hojas | `GET /api/tree/stats` |
-| 13 | Ancestros | `GET /api/tree/nodes/{valor}/ancestors` |
-| 14 | Verificar balance | `GET /api/tree/balance` |
-| 15 | Ancestro común más bajo | `GET /api/tree/lca?a={x}&b={y}` |
-| Extra | Actualizar, vaciar, cargar ejemplo | `PUT /api/tree/nodes/{valor}`, `DELETE /api/tree`, `POST /api/tree/seed` |
+Tomé cuatro decisiones que conviene explicar. Los valores son enteros entre -999 y 999 y el árbol admite 1000 nodos como máximo, para que cada número quepa en su círculo y el dibujo siga siendo legible. Los errores salen como `problem+json`: 400 si el valor es inválido, 404 si el nodo no existe y 409 si está repetido. El árbol viaja como una lista plana de nodos, cada uno con su valor, su padre, su lado, su nivel y su posición inorden, porque un árbol anidado habría fallado con cadenas de más de 64 niveles, el límite de profundidad de System.Text.Json (y de paso esos datos son justo lo que necesita el dibujo). Por último, el árbol vive en memoria, sin base de datos, protegido con un candado de lectura y escritura.
 
-Tomé cuatro decisiones que conviene explicar. Los valores son enteros entre -999 y 999 y el árbol admite 1000 nodos como máximo, para que cada número quepa en su círculo y el dibujo siga siendo legible. Los errores salen como `problem+json`: 400 si el valor es inválido, 404 si el nodo no existe y 409 si está repetido. El árbol viaja como una lista plana de nodos (`value`, `parent`, `side`, `level` e `inorderIndex`), porque un árbol anidado habría fallado con cadenas de más de 64 niveles, el límite de profundidad de System.Text.Json (y de paso esos campos son justo lo que necesita el dibujo). Por último, el árbol vive en memoria, sin base de datos, protegido con un candado de lectura y escritura.
-
-El cliente no calcula nada del árbol. Solo calcula posiciones para dibujarlo; todos los resultados vienen de la API.
+El cliente no calcula nada del árbol. Solo calcula posiciones para dibujarlo, y todos los resultados vienen de la API.
 
 ## 5. MVC, POO, SOLID y CRUD
 
-Apliqué el patrón Modelo-Vista-Controlador en las dos capas. Como el servidor responde JSON y no páginas, su vista son los DTO. En el cliente, el modelo (`TreeModel` y `ApiClient`) guarda el estado y avisa a quien lo escucha, las vistas (`TreeView`, `SummaryView`, `TraversalView`, `ResultView` y `PaletteView`) se redibujan cuando el modelo cambia, y el controlador (`TreeController`) recibe los eventos, llama a la API y actualiza el modelo. Ninguna vista llama a otra ni a la API.
+Apliqué el patrón Modelo-Vista-Controlador en las dos capas. Como el servidor responde JSON y no páginas, su vista son los DTO. En el cliente, el modelo guarda el estado y avisa a quien lo escucha, las vistas se redibujan cuando el modelo cambia, y el controlador recibe los eventos, llama a la API y actualiza el modelo. Ninguna vista llama a otra ni a la API.
 
-![Figura 1. Diagrama de clases del servidor. Los controladores dependen de dos interfaces y ArbolService las implementa.](capturas/fig23_diagrama_de_clases.png "w=5.6")
+![Figura 1. Capas MVC en el cliente y en el servidor.](capturas/fig24_capas_mvc.png "w=5.6")
 
-![Figura 2. Capas MVC en el cliente y en el servidor.](capturas/fig24_capas_mvc.png "w=5.6")
+En cuanto a POO, `Nodo` solo se modifica desde el modelo, los controladores conocen interfaces y no clases concretas, los cuatro recorridos implementan `IRecorrido` y `ArbolService` contiene un árbol y un candado en lugar de heredar de él.
 
-En cuanto a POO, `Nodo` solo se modifica desde el modelo (`internal set`), los controladores conocen interfaces y no clases concretas, los cuatro recorridos implementan `IRecorrido` y `ArbolService` contiene un árbol y un candado en lugar de heredar de él. Los cinco principios SOLID quedaron así:
+Los cinco principios SOLID se ven así en el código. Para la responsabilidad única, `ArbolBinarioBusqueda` solo mantiene la estructura, las consultas son clases aparte y el candado vive en `ArbolService`. Para abierto y cerrado, agregar un recorrido es escribir una clase que implemente `IRecorrido` y registrarla en `Program.cs`, sin tocar lo demás; una prueba lo comprueba con un recorrido inverso. Para Liskov, cualquier `IRecorrido` se puede cambiar por otro sin alterar el uso. Para segregación de interfaces, `IArbolComandos`, `IArbolConsultas` e `IRecorrido` son pequeñas, y `RecorridosController` solo recibe la de consultas. Y para inversión de dependencias, los controladores reciben interfaces por constructor y `Program.cs` registra las clases concretas.
 
-| Principio | Dónde se ve |
-|---|---|
-| Responsabilidad única | `ArbolBinarioBusqueda` solo mantiene la estructura. Las consultas son clases aparte y el candado vive en `ArbolService` |
-| Abierto y cerrado | Un recorrido nuevo es otra clase `IRecorrido` registrada en `Program.cs`. Una prueba lo comprueba con un recorrido inverso |
-| Sustitución de Liskov | Cualquier `IRecorrido` se puede cambiar por otro sin tocar el uso |
-| Segregación de interfaces | `IArbolComandos`, `IArbolConsultas` e `IRecorrido` son pequeñas. `RecorridosController` solo recibe la de consultas |
-| Inversión de dependencias | Los controladores reciben interfaces por constructor y `Program.cs` registra las clases |
-
-Para el CRUD, crear es `POST`, leer son todos los `GET`, actualizar es `PUT` y borrar es `DELETE`. En un ABB cambiar un valor equivale a borrar el viejo e insertar el nuevo, porque la posición depende del valor. `ArbolService` lo hace bajo un solo candado, y si el valor nuevo ya existe responde 409 sin cambiar nada.
+El CRUD queda cubierto así: crear es un `POST`, leer son todos los `GET`, actualizar es un `PUT` y borrar es un `DELETE`. En un ABB cambiar un valor equivale a borrar el viejo e insertar el nuevo, porque la posición depende del valor. `ArbolService` lo hace bajo un solo candado, y si el valor nuevo ya existe responde 409 sin cambiar nada.
 
 ## 6. Código principal
 
-No pego todo el código (está en el repositorio), solo las piezas que explican las decisiones.
-
-El borrado es lo más delicado del árbol. Cuando el nodo tiene dos hijos busca el sucesor, copia su valor y reconecta el hijo derecho del sucesor, y devuelve el camino recorrido para que la interfaz lo anime.
+No pego todo el código, que está en el repositorio, sino las piezas que explican las decisiones. El borrado es lo más delicado del árbol: cuando el nodo tiene dos hijos busca el sucesor, copia su valor, reconecta el hijo derecho del sucesor y devuelve el camino recorrido para que la interfaz lo anime.
 
 Archivo: `src/Abb.Core/Estructura/ArbolBinarioBusqueda.cs`
 
@@ -179,42 +153,6 @@ public interface IArbolConsultas
 }
 ```
 
-`ArbolService` implementa las dos y toma el candado correspondiente en cada llamada. Aquí se ven la actualización y el método que envuelve todas las lecturas.
-
-Archivo: `src/Abb.Core/Servicios/ArbolService.cs`
-
-```csharp
-    public ActualizacionResultado Actualizar(int actual, int nuevo)
-    {
-        _candado.EnterWriteLock();
-        try
-        {
-            if (!_arbol.Buscar(actual).Encontrado)
-                return new ActualizacionResultado(EstadoActualizacion.NoExiste);
-            if (actual == nuevo)
-                return new ActualizacionResultado(EstadoActualizacion.Actualizado);
-            if (_arbol.Buscar(nuevo).Encontrado)
-                return new ActualizacionResultado(EstadoActualizacion.Duplicado);
-            _arbol.Borrar(actual);
-            _arbol.Insertar(nuevo);
-            return new ActualizacionResultado(EstadoActualizacion.Actualizado);
-        }
-        finally { _candado.ExitWriteLock(); }
-    }
-```
-
-Archivo: `src/Abb.Core/Servicios/ArbolService.cs`
-
-```csharp
-    private T Leer<T>(Func<T> lectura)
-    {
-        _candado.EnterReadLock();
-        try { return lectura(); }
-        finally { _candado.ExitReadLock(); }
-    }
-}
-```
-
 El controlador valida la entrada, llama al servicio y traduce el resultado a un código HTTP.
 
 Archivo: `src/Abb.Api/Controllers/NodosController.cs`
@@ -235,55 +173,6 @@ Archivo: `src/Abb.Api/Controllers/NodosController.cs`
 
         return Created($"/api/tree/nodes/{valor}", new InsertResponse(Mapeo.Arbol(_consultas), r.Ruta));
     }
-```
-
-`Program.cs` es corto porque casi todo se resuelve con inyección de dependencias.
-
-Archivo: `src/Abb.Api/Program.cs`
-
-```csharp
-using Abb.Core.Estructura;
-using Abb.Core.Recorridos;
-using Abb.Core.Servicios;
-
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddControllers();
-builder.Services.AddProblemDetails();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-// Inyección de dependencias: los controladores solo conocen las interfaces.
-builder.Services.AddSingleton<ArbolBinarioBusqueda>();
-builder.Services.AddSingleton<IRecorrido, Preorden>();
-builder.Services.AddSingleton<IRecorrido, Inorden>();
-builder.Services.AddSingleton<IRecorrido, Postorden>();
-builder.Services.AddSingleton<IRecorrido, PorNiveles>();
-builder.Services.AddSingleton<ArbolService>();
-builder.Services.AddSingleton<IArbolComandos>(sp => sp.GetRequiredService<ArbolService>());
-builder.Services.AddSingleton<IArbolConsultas>(sp => sp.GetRequiredService<ArbolService>());
-
-var app = builder.Build();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-app.UseExceptionHandler();
-app.UseStatusCodePages();
-
-// El build del frontend se copia a wwwroot, así que `dotnet run` sirve todo.
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
-app.MapControllers();
-
-app.Run();
-
-// Necesario para WebApplicationFactory en las pruebas de integración.
-public partial class Program;
 ```
 
 En el cliente, el controlador ejecuta el borrado como una secuencia: pide la operación a la API, anima la ruta y la desintegración del nodo, y al final dibuja el árbol con la respuesta. Si una animación falla, el árbol se dibuja de todos modos.
@@ -320,81 +209,35 @@ Archivo: `web/src/controller/TreeController.js`
   }
 ```
 
-## 7. Funcionalidad
+## 7. La aplicación en funcionamiento
 
-Las capturas salen de la aplicación en ejecución, siempre desde el árbol de ejemplo (botón «Ejemplo»): 50, 30, 70, 20, 40, 60, 80, 35, 45 y 65. A la izquierda están los campos de valor y los botones, en el centro el árbol, y a la derecha el resumen, los recorridos y el resultado. Con Ctrl+K se abre el menú de las quince operaciones.
+Las capturas salen de la aplicación ejecutándose, siempre desde el árbol de ejemplo que se carga con el botón «Ejemplo»: 50, 30, 70, 20, 40, 60, 80, 35, 45 y 65. A la izquierda están el campo de valor y los botones, en el centro el árbol, y a la derecha el resumen con contadores, los recorridos y el resultado de la última operación. Con Ctrl+K se abre un menú con las quince operaciones, y cada una resalta en el árbol el camino que recorre.
 
-![Figura 3. Pantalla principal con el árbol de ejemplo: 10 nodos, 5 hojas y 4 niveles.](capturas/fig01_pantalla_principal.png "w=5.0")
+![Figura 2. Pantalla principal con el árbol de ejemplo: 10 nodos, 5 hojas y 4 niveles.](capturas/fig01_pantalla_principal.png "w=5.2")
 
-![Figura 4. Menú de operaciones abierto con Ctrl+K.](capturas/fig02_menu_de_operaciones.png "w=4.6")
+![Figura 3. Menú de operaciones abierto con Ctrl+K.](capturas/fig02_menu_de_operaciones.png "w=4.8")
 
-**1. Imprimir.** Muestra el árbol girado: el hijo derecho arriba, el izquierdo abajo y cuatro espacios de sangría por nivel.
+Al buscar un valor, la ruta se ilumina nodo por nodo y el resultado se marca en verde. Al insertar, se recorre la ruta y después aparece el nodo nuevo.
 
-![Figura 5. Impresión del árbol de ejemplo, con el 50 como raíz al margen izquierdo.](capturas/fig03_imprimir_elementos.png "w=4.6")
+![Figura 4. Búsqueda del 45: la ruta 50, 30, 40, 45 queda resaltada y el nodo aparece en verde.](capturas/fig04_buscar_encontrado.png "w=4.8")
 
-**2. Buscar.** Resalta la ruta nodo por nodo. Si encuentra el valor lo marca en verde e indica su nivel. Si no, marca el último nodo visitado.
+![Figura 5. Inserción del 55 como hijo izquierdo del 60.](capturas/fig06_insertar.png "w=4.8")
 
-![Figura 6. Búsqueda del 45: ruta 50, 30, 40, 45 y nivel 4.](capturas/fig04_buscar_encontrado.png "w=4.6")
+Borrar un nodo con dos hijos es el caso más vistoso: se recorre el camino hasta el sucesor inorden, el nodo se deshace en caracteres y el sucesor ocupa su lugar.
 
-![Figura 7. Búsqueda del 99, que no existe: la ruta termina en el 80.](capturas/fig05_buscar_no_encontrado.png "w=4.6")
+![Figura 6. Borrado del 70: sube su sucesor inorden, el 80.](capturas/fig09_borrar_dos_hijos.png "w=4.8")
 
-**3. Insertar.** Recorre la ruta de inserción y luego aparece el nodo nuevo.
+Los recorridos numeran los nodos en el orden de visita y dejan la lista como una fila de pastillas. Una de las operaciones libres, el ancestro común más bajo, marca las dos rutas y el nodo en común.
 
-![Figura 8. Inserción del 55 como hijo izquierdo del 60.](capturas/fig06_insertar.png "w=4.6")
+![Figura 7. Recorrido en inorden: los valores salen ordenados de menor a mayor.](capturas/fig12_recorrido_inorden.png "w=4.8")
 
-**4. Borrar.** Marca el nodo en rojo. Si tiene dos hijos recorre además el camino al sucesor, en amarillo, y el nodo se deshace en caracteres antes de redibujar.
+![Figura 8. Ancestro común más bajo de 35 y 45: es el 40.](capturas/fig20_op15_ancestro_comun.png "w=4.8")
 
-![Figura 9. Borrado del 35, una hoja.](capturas/fig07_borrar_hoja.png "w=4.4")
+En pantallas angostas el árbol pasa arriba y los paneles se apilan. La API, por su parte, se puede explorar en Swagger.
 
-![Figura 10. Borrado del 60, que tiene un solo hijo: el 65 ocupa su lugar.](capturas/fig08_borrar_un_hijo.png "w=4.4")
+![Figura 9. Vista con un ancho de 390 px, el de un teléfono (no es un dispositivo real).](capturas/fig22_vista_telefono.png "w=2.0")
 
-![Figura 11. Borrado del 70, con dos hijos: sube su sucesor inorden, el 80.](capturas/fig09_borrar_dos_hijos.png "w=4.4")
-
-**5 a 8. Recorridos.** Numeran los nodos en el orden de visita y dejan la lista como una fila de pastillas.
-
-![Figura 12. Recorrido por niveles: 50, 30, 70, 20, 40, 60, 80, 35, 45, 65.](capturas/fig10_recorrido_por_niveles.png "w=4.4")
-
-![Figura 13. Recorrido en preorden: 50, 30, 20, 40, 35, 45, 70, 60, 65, 80.](capturas/fig11_recorrido_preorden.png "w=4.4")
-
-![Figura 14. Recorrido en postorden: 20, 35, 45, 40, 30, 65, 60, 80, 70, 50.](capturas/fig13_recorrido_postorden.png "w=4.4")
-
-![Figura 15. Recorrido en inorden: salen ordenados de menor a mayor.](capturas/fig12_recorrido_inorden.png "w=4.4")
-
-**9. Número de niveles.** Dice cuántos niveles hay y cuántos nodos tiene cada uno. La gráfica del resumen muestra lo mismo.
-
-![Figura 16. El árbol de ejemplo tiene 4 niveles, con 1, 2, 4 y 3 nodos.](capturas/fig14_numero_de_niveles.png "w=4.4")
-
-**10. Nivel de un nodo.**
-
-![Figura 17. El nodo 35 está en el nivel 4, contando la raíz como nivel 1.](capturas/fig15_nivel_de_un_nodo.png "w=4.4")
-
-**11. Mínimo y máximo.** Baja por la rama izquierda y luego por la derecha.
-
-![Figura 18. Mínimo 20 (ruta 50, 30, 20) y máximo 80 (ruta 50, 70, 80).](capturas/fig16_op11_minimo_y_maximo.png "w=4.4")
-
-**12. Contar nodos y hojas.**
-
-![Figura 19. 10 nodos, 5 hojas y 5 nodos internos.](capturas/fig17_op12_contar_nodos_y_hojas.png "w=4.4")
-
-**13. Ancestros.** Camino de la raíz al padre. Para la raíz devuelve una lista vacía, y para un valor que no existe, 404.
-
-![Figura 20. Ancestros del 35: 50, 30 y 40.](capturas/fig18_op13_ancestros.png "w=4.4")
-
-**14. Balance.** Usa el criterio AVL: en cada nodo, las alturas de los dos subárboles difieren como máximo en 1. El número sobre cada nodo es su factor de equilibrio.
-
-![Figura 21. El árbol de ejemplo está balanceado: todos los factores están entre -1 y 1.](capturas/fig19_op14_balance.png "w=4.4")
-
-**15. Ancestro común más bajo.** Si falta alguno de los dos valores, responde 404 e indica cuál.
-
-![Figura 22. Ancestro común más bajo de 35 y 45: las rutas comparten 50, 30 y 40, y el resultado es el 40.](capturas/fig20_op15_ancestro_comun.png "w=4.4")
-
-En pantallas angostas el árbol pasa arriba y los paneles se apilan.
-
-![Figura 23. Vista con un ancho de 390 px, el de un teléfono (no es un dispositivo real).](capturas/fig22_vista_telefono.png "w=2.0")
-
-La API también se puede explorar en Swagger.
-
-![Figura 24. Swagger con los controladores Arbol, Nodos y Recorridos.](capturas/fig21_swagger.png "w=4.2")
+![Figura 10. Swagger con los controladores Arbol, Nodos y Recorridos.](capturas/fig21_swagger.png "w=4.2")
 
 ## 8. Pruebas y límites
 
